@@ -1,0 +1,27 @@
+# Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+gunicorn==21.2.0
+
+# Core ML & NLP
+numpy==1.26.4
+torch==2.0.0
+transformers==4.30.0
+sentence-transformers==2.2.2
+huggingface-hub==0.16.4
+
+# PDF Processing
+pdfplumber==0.11.7
+faiss-cpu==1.11.0.post1
+
+# Utilities
+tqdm==4.67.1
+openai==1.99.9
+python-dotenv==1.1.1
+
+# ML Dependencies
+scikit-learn==1.7.1
+scipy==1.16.1
+
+# Additional Dependencies
+pydantic>=2.0.0
