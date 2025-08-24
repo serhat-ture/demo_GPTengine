@@ -5,9 +5,7 @@ Core RAG service extracted from your existing script.
 IMPORTANT: Keeps OPENAI_MODEL='gpt-5-nano' unchanged.
 """
 
-# core.py (güncelle)
-import os
-import json
+import os, json
 import pdfplumber
 import faiss
 import numpy as np
@@ -16,25 +14,28 @@ from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 from openai import OpenAI
 
+# === CONFIGURATION (same as your script) ===
 PDF_PATH = "Keep_Me_Certified_MA_Exam_Prep_Book.pdf"
 RULES_PATH = "rules.txt"
-EMBED_MODEL = "all-MiniLM-L6-v2"
+EMBED_MODEL = "all-MiniLM-L6-v2"  # SBERT embedding model
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 100
 TOP_K = 3
-OPENAI_MODEL = "gpt-5-nano"
+OPENAI_MODEL = "gpt-5-nano"  # DO NOT CHANGE without your approval
 
-# Artefact yolları
-ART_DIR = os.path.join("cache", "artifacts")
+# Artefact klasörü
+ART_DIR = os.getenv("ART_DIR", "cache/artifacts")
 CHUNKS_JSON = os.path.join(ART_DIR, "chunks.json")
-EMB_NUMPY = os.path.join(ART_DIR, "embeddings.npy")
-FAISS_IDX = os.path.join(ART_DIR, "index.faiss")
+EMB_NPY      = os.path.join(ART_DIR, "embeddings.npy")
+FAISS_IDX    = os.path.join(ART_DIR, "index.faiss")
 
+# === LOAD OPENAI CLIENT ===
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise ValueError("❌ Missing OPENAI_API_KEY (env or App Settings)")
 client = OpenAI(api_key=OPENAI_API_KEY)
+
 
 def extract_text(pdf_path: str) -> str:
     text = ""
@@ -44,6 +45,7 @@ def extract_text(pdf_path: str) -> str:
             if page_text:
                 text += page_text + "\n"
     return text
+
 
 def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP):
     chunks = []
@@ -60,8 +62,10 @@ def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP):
             break
     return chunks
 
+
 def embed_chunks(chunks, model: SentenceTransformer):
-    return np.array(model.encode(chunks), dtype=np.float32)
+    return np.array(model.encode(chunks))
+
 
 def build_faiss_index(embeddings: np.ndarray):
     dim = embeddings.shape[1]
@@ -69,10 +73,12 @@ def build_faiss_index(embeddings: np.ndarray):
     index.add(embeddings)
     return index
 
+
 def retrieve_relevant_chunks(query: str, model: SentenceTransformer, index, chunks, top_k: int = TOP_K):
-    query_embedding = np.array(model.encode([query]), dtype=np.float32)
-    D, I = index.search(query_embedding, top_k)
+    query_embedding = model.encode([query])
+    D, I = index.search(np.array(query_embedding), top_k)
     return [chunks[i] for i in I[0]]
+
 
 def get_openai_response(messages, model_name: str = OPENAI_MODEL) -> str:
     try:
@@ -85,45 +91,57 @@ def get_openai_response(messages, model_name: str = OPENAI_MODEL) -> str:
     except Exception as e:
         return f"(❌ OpenAI Error: {e})"
 
+
 class RAGService:
+    """
+    Loads artifacts if present; otherwise builds from PDF and saves.
+    """
     def __init__(self,
                  pdf_path: str = PDF_PATH,
                  rules_path: str = RULES_PATH,
                  embed_model_name: str = EMBED_MODEL):
-        os.makedirs(ART_DIR, exist_ok=True)
 
-        # Rules
         if not os.path.exists(rules_path):
             raise FileNotFoundError(f"❌ Rules file not found: {rules_path}")
+
         with open(rules_path, "r", encoding="utf-8") as f:
             self.rules_text = f.read()
 
+        # Model (küçük, ilk indirmede birkaç sn sürebilir; cache'e alınır)
         self.embed_model = SentenceTransformer(embed_model_name)
 
-        # 1) Varsa artefact’ları yükle
-        if all(os.path.exists(p) for p in [CHUNKS_JSON, EMB_NUMPY, FAISS_IDX]):
+        # Artefact’lar hazır mı?
+        artifacts_exist = all([
+            os.path.exists(CHUNKS_JSON),
+            os.path.exists(EMB_NPY),
+            os.path.exists(FAISS_IDX),
+        ])
+
+        if artifacts_exist:
+            # HAZIR ARTEFACT'LARDAN YÜKLE
             with open(CHUNKS_JSON, "r", encoding="utf-8") as f:
                 self.chunks = json.load(f)
-            self.embeddings = np.load(EMB_NUMPY)
+            self.embeddings = np.load(EMB_NPY)
             self.index = faiss.read_index(FAISS_IDX)
         else:
-            # 2) Yoksa üret ve kaydet
+            # ÜRET VE KAYDET
             if not os.path.exists(pdf_path):
                 raise FileNotFoundError(f"❌ PDF file not found: {pdf_path}")
+
             text = extract_text(pdf_path)
             self.chunks = chunk_text(text)
             self.embeddings = embed_chunks(self.chunks, self.embed_model)
             self.index = build_faiss_index(self.embeddings)
 
-            # Kaydet
+            os.makedirs(ART_DIR, exist_ok=True)
             with open(CHUNKS_JSON, "w", encoding="utf-8") as f:
                 json.dump(self.chunks, f, ensure_ascii=False)
-            np.save(EMB_NUMPY, self.embeddings)
+            np.save(EMB_NPY, self.embeddings)
             faiss.write_index(self.index, FAISS_IDX)
 
     def answer(self, query: str) -> str:
-        relevant = retrieve_relevant_chunks(query, self.embed_model, self.index, self.chunks)
-        context = "\n\n".join(relevant)
+        relevant_chunks = retrieve_relevant_chunks(query, self.embed_model, self.index, self.chunks)
+        context = "\n\n".join(relevant_chunks)
         system_prompt = f"""You are a helpful real estate assistant.
 Always follow these rules:
 
