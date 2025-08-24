@@ -24,8 +24,8 @@ TOP_K = 3
 OPENAI_MODEL = "gpt-5-nano"  # DO NOT CHANGE without your approval
 
 # Artefact klasörü
-ART_DIR = os.getenv("ART_DIR", "cache/artifacts")
-CHUNKS_JSON = os.path.join(ART_DIR, "chunks.json")
+ART_DIR      = os.getenv("ART_DIR", "cache/artifacts")
+CHUNKS_JSON  = os.path.join(ART_DIR, "chunks.json")
 EMB_NPY      = os.path.join(ART_DIR, "embeddings.npy")
 FAISS_IDX    = os.path.join(ART_DIR, "index.faiss")
 
@@ -48,14 +48,11 @@ def extract_text(pdf_path: str) -> str:
 
 
 def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP):
-    chunks = []
-    start = 0
-    i = 0
+    chunks, start, i = [], 0, 0
     total_chunks = max(1, (len(text) - overlap) // (size - overlap) + 1)
     for _ in tqdm(range(total_chunks), desc="✂️ Chunking text"):
         end = min(start + size, len(text))
-        chunk = f"[Chunk {i}]\n{text[start:end]}"
-        chunks.append(chunk)
+        chunks.append(f"[Chunk {i}]\n{text[start:end]}")
         start += size - overlap
         i += 1
         if start >= len(text):
@@ -111,20 +108,16 @@ class RAGService:
         self.embed_model = SentenceTransformer(embed_model_name)
 
         # Artefact’lar hazır mı?
-        artifacts_exist = all([
-            os.path.exists(CHUNKS_JSON),
-            os.path.exists(EMB_NPY),
-            os.path.exists(FAISS_IDX),
-        ])
+        artifacts_exist = all(map(os.path.exists, [CHUNKS_JSON, EMB_NPY, FAISS_IDX]))
 
         if artifacts_exist:
-            # HAZIR ARTEFACT'LARDAN YÜKLE
+            print(f"✅ Loading artifacts from: {ART_DIR}")
             with open(CHUNKS_JSON, "r", encoding="utf-8") as f:
                 self.chunks = json.load(f)
             self.embeddings = np.load(EMB_NPY)
             self.index = faiss.read_index(FAISS_IDX)
         else:
-            # ÜRET VE KAYDET
+            print("🚧 Artifacts not found; building from PDF (slow)")
             if not os.path.exists(pdf_path):
                 raise FileNotFoundError(f"❌ PDF file not found: {pdf_path}")
 
@@ -134,6 +127,7 @@ class RAGService:
             self.index = build_faiss_index(self.embeddings)
 
             os.makedirs(ART_DIR, exist_ok=True)
+            print(f"💾 Saving artifacts to: {ART_DIR}")
             with open(CHUNKS_JSON, "w", encoding="utf-8") as f:
                 json.dump(self.chunks, f, ensure_ascii=False)
             np.save(EMB_NPY, self.embeddings)
