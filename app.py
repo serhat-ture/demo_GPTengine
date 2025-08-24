@@ -1,50 +1,55 @@
-# app.py (küçük ekleme)
-from fastapi import FastAPI, HTTPException
+# app.py
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from threading import Lock
 
 from core import RAGService, OPENAI_MODEL
 
 app = FastAPI(title="openai_Assistant_RAG API")
 
-# CORS - geliştirme için tüm origin'lere izin (isteğe göre daralt)
+# CORS (gerekirse domainlerinle sınırla)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # prod'da kendi domainlerinle sınırla
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Global değişkenler
-rag = None
-ready = False
+_rag = None
+_rag_lock = Lock()
 
-@app.on_event("startup")
-def _startup():
-    global rag, ready
-    try:
-        rag = RAGService()
-        ready = True
-    except Exception as e:
-        ready = False
-        raise e
+def get_rag():
+    global _rag
+    if _rag is None:
+        with _rag_lock:
+            if _rag is None:
+                print("🟡 Initializing RAGService (lazy)...")
+                _rag = RAGService()
+                print("🟢 RAGService ready.")
+    return _rag
 
 class ChatRequest(BaseModel):
     query: str
 
+@app.get("/")
+def root():
+    return {"ok": True, "service": "openai_Assistant_RAG", "hint": "See /health, /chat"}
+
 @app.get("/health")
 def health():
-    return {
-        "status": "ok" if ready else "initializing",
-        "model": OPENAI_MODEL,
-        "chunks": 0 if not ready else len(rag.chunks),
-        "top_k": 3
-    }
+    global _rag
+    if _rag is None:
+        # Henüz ilk istek gelmemiş (lazy init bekliyor)
+        return {"status": "booting", "model": OPENAI_MODEL}
+    try:
+        return {"status": "ok", "model": OPENAI_MODEL, "chunks": len(_rag.chunks), "top_k": 3}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 @app.post("/chat")
 def chat(req: ChatRequest):
-    if not ready:
-        raise HTTPException(status_code=503, detail="Service is initializing, try again in a minute.")
+    rag = get_rag()
     answer = rag.answer(req.query)
     return {"answer": answer}
