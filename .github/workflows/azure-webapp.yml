@@ -16,9 +16,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # (İsteğe bağlı) Python setuplamak sadece test için gerekirdi.
-      # Deploy için şart değil; webapps-deploy paketi zipleyip gönderecek.
-      # Yine de basic doğrulama için pip install çalıştırabiliriz.
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -33,16 +30,15 @@ jobs:
           test -f rules.txt || (echo "rules.txt missing" && exit 1)
           test -f Keep_Me_Certified_MA_Exam_Prep_Book.pdf || (echo "PDF missing" && exit 1)
 
-      # İstersen burada test amaçlı pip install ile syntax hatası yakalanır
-      - name: (Optional) Quick install check
+      # 👉 Burada özel paket klasörü oluşturuyoruz
+      - name: Prepare deployment package
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          mkdir deploy
+          cp app.py core.py requirements.txt Procfile rules.txt Keep_Me_Certified_MA_Exam_Prep_Book.pdf deploy/
 
-      # Azure Web Apps Deploy (Zip Deploy)
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: opentrue-ai
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_OPENTRUE_AI }}
-          package: . 
+          package: ./deploy
