@@ -1,7 +1,15 @@
-.env
+# Python caches
 __pycache__/
 *.pyc
-.env
-apikey.txt
+
+# Venv
 .venv/
-.DS_Store
+venv/
+
+# Azure gereksiz dosyalar
+output.tar.gz
+*.zip
+
+# Local cache
+cache/
+artifacts/
