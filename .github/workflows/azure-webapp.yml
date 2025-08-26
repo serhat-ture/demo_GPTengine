@@ -30,16 +30,15 @@ jobs:
           test -f rules.txt || (echo "rules.txt missing" && exit 1)
           test -f Keep_Me_Certified_MA_Exam_Prep_Book.pdf || (echo "PDF missing" && exit 1)
 
-     - name: Prepare deployment package
-  run: |
-    mkdir -p deploy/cache/artifacts
-    cp app.py core.py requirements.txt Procfile rules.txt Keep_Me_Certified_MA_Exam_Prep_Book.pdf deploy/
-    if compgen -G "artifacts/*" > /dev/null; then
-      cp artifacts/* deploy/cache/artifacts/
-    else
-      echo "No artifacts to copy"
-    fi
-
+      - name: Prepare deployment package
+        run: |
+          mkdir -p deploy/cache/artifacts
+          cp app.py core.py requirements.txt Procfile rules.txt Keep_Me_Certified_MA_Exam_Prep_Book.pdf deploy/
+          if compgen -G "artifacts/*" > /dev/null; then
+            cp artifacts/* deploy/cache/artifacts/
+          else
+            echo "No artifacts to copy"
+          fi
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
