@@ -13,3 +13,13 @@ output.tar.gz
 # Local cache
 cache/
 artifacts/
+
+# Secrets
+.env
+deploy/
+
+# CI packaging
+deploy/
+
+# macOS
+.DS_Store
