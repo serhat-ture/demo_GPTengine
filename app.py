@@ -6,7 +6,7 @@ from threading import Lock
 
 from core import RAGService, OPENAI_MODEL
 
-app = FastAPI(title="openai_Assistant_RAG API")
+app = FastAPI(title="opentrue-ai RAG API")
 
 # CORS (gerekirse domainlerinle sınırla)
 app.add_middleware(
@@ -35,7 +35,7 @@ class ChatRequest(BaseModel):
 
 @app.get("/")
 def root():
-    return {"ok": True, "service": "openai_Assistant_RAG", "hint": "See /health, /chat"}
+    return {"ok": True, "service": "opentrue-ai", "hint": "See /health, /chat"}
 
 @app.get("/health")
 def health():

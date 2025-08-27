@@ -1,48 +1,41 @@
-name: Build and deploy Python app to Azure Web App - opentrue-ai
+name: Deploy to Azure Web App
 
 on:
   push:
-    branches:
-      - main
-
-permissions:
-  contents: read
+    branches: [ "main" ]
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
 
-      - name: Verify required files exist
-        run: |
-          test -f app.py || (echo "app.py missing" && exit 1)
-          test -f core.py || (echo "core.py missing" && exit 1)
-          test -f Procfile || (echo "Procfile missing" && exit 1)
-          test -f requirements.txt || (echo "requirements.txt missing" && exit 1)
-          test -f rules.txt || (echo "rules.txt missing" && exit 1)
-          test -f Keep_Me_Certified_MA_Exam_Prep_Book.pdf || (echo "PDF missing" && exit 1)
+    - name: Prepare deployment package (minimal)
+      run: |
+        rm -rf deploy
+        mkdir -p deploy/cache/artifacts
+        # GEREKEN DOSYALARI AÇIKÇA KOPYALA
+        cp app.py Procfile core.py requirements.txt rules.txt deploy/
+        cp "Keep_Me_Certified_MA_Exam_Prep_Book.pdf" deploy/
+        # Artefact'lar varsa kopyala (opsiyonel)
+        if compgen -G "artifacts/*" > /dev/null; then
+          cp artifacts/* deploy/cache/artifacts/
+        else
+          echo "No artifacts to copy"
+        fi
+        # (İSTEĞE BAĞLI) paketle
+        (cd deploy && zip -r ../package.zip .)
 
-      - name: Prepare deployment package
-        run: |
-          mkdir -p deploy/cache/artifacts
-          cp app.py core.py requirements.txt Procfile rules.txt Keep_Me_Certified_MA_Exam_Prep_Book.pdf deploy/
-          if compgen -G "artifacts/*" > /dev/null; then
-            cp artifacts/* deploy/cache/artifacts/
-          else
-            echo "No artifacts to copy"
-          fi
-
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: opentrue-ai
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_OPENTRUE_AI }}
-          package: ./deploy
+    - name: Deploy to Azure WebApp
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: opentrue-ai
+        publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_OPENTRUE_AI }}
+        package: ./package.zip
