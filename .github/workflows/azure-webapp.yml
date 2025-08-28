@@ -1,8 +1,16 @@
-name: Deploy to Azure Web App
+name: Deploy to Azure Web App (Folder Package)
 
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: appservice-deploy
+  cancel-in-progress: true
 
 jobs:
   build-and-deploy:
@@ -12,36 +20,49 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
+    # (İsteğe bağlı) Python kurulumuna ihtiyacın yoksa bu adımı silebilirsin
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
-    - name: Prepare deployment package (minimal)
+    - name: Prepare deployment folder (minimal)
       run: |
+        set -e
         rm -rf deploy
         mkdir -p deploy/cache/artifacts
-        # GEREKEN DOSYALARI AÇIKÇA KOPYALA
+
+        # GEREKEN dosyaları AÇIKÇA kopyala
         cp app.py Procfile core.py requirements.txt rules.txt deploy/
+        # PDF dosya adını birebir doğru yaz (uzantı dahil!)
         cp "Keep_Me_Certified_MA_Exam_Prep_Book.pdf" deploy/
-        # Artefact'lar varsa kopyala (opsiyonel)
+
+        # (Varsa) artefact'ları ekle; yoksa sorun yapma
         if compgen -G "artifacts/*" > /dev/null; then
           cp artifacts/* deploy/cache/artifacts/
         else
           echo "No artifacts to copy"
         fi
-        # (İSTEĞE BAĞLI) paketle
-        (cd deploy && zip -r ../package.zip .)
 
-    - name: Verify deployment package
+        # Temizlik: gereksiz büyük klasörleri kesinlikle deploy etme
+        rm -rf deploy/__pycache__ || true
+
+    - name: Verify deployment folder
       run: |
-        ls -lah
-        test -f package.zip || (echo "package.zip missing"; exit 1)
-        unzip -l package.zip
+        set -e
+        echo "=== deploy/ içeriği ==="
+        ls -lah deploy
+        echo "=== cache/artifacts/ içeriği ==="
+        ls -lah deploy/cache/artifacts || true
 
-    - name: Deploy to Azure WebApp
+        # Zorunlu dosyalar kontrolü (yoksa FAIL et)
+        for f in app.py Procfile core.py requirements.txt rules.txt "Keep_Me_Certified_MA_Exam_Prep_Book.pdf"; do
+          test -f "deploy/$f" || (echo "Missing: deploy/$f" && exit 1)
+        done
+
+    - name: Deploy to Azure WebApp (folder)
       uses: azure/webapps-deploy@v2
       with:
         app-name: opentrue-ai
         publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_OPENTRUE_AI }}
-        package: ./package.zip
+        package: ./deploy          # ZIP yerine klasör gönderiyoruz
