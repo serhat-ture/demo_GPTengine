@@ -33,6 +33,12 @@ jobs:
         # (İSTEĞE BAĞLI) paketle
         (cd deploy && zip -r ../package.zip .)
 
+    - name: Verify deployment package
+      run: |
+        ls -lah
+        test -f package.zip || (echo "package.zip missing"; exit 1)
+        unzip -l package.zip
+
     - name: Deploy to Azure WebApp
       uses: azure/webapps-deploy@v2
       with:
